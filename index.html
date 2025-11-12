@@ -1,182 +1,606 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8"/>
-<title>CR-ish Single File Demo</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Clash-lite: Playable vs Bot (single file)</title>
 <style>
-  body{font-family:system-ui,Segoe UI,Arial;margin:16px;background:#0b0f1a;color:#e6f0ff}
-  .panel{background:#0f1724;padding:12px;border-radius:8px;margin-bottom:12px}
-  button{padding:8px 12px;border-radius:6px;border:0;background:#1f6feb;color:white;cursor:pointer}
-  .card{display:inline-block;padding:6px 10px;border-radius:6px;background:#111827;margin:6px}
-  .meter{height:10px;background:#233;color:#1f6feb;border-radius:4px;overflow:hidden}
-  .meter > i{display:block;height:100%;background:#34d; width:0%}
+  :root{
+    --bg:#071226;
+    --panel:#0b1b2a;
+    --accent:#1f9fff;
+    --muted:#9fb7d6;
+    --green:#3ee18a;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,Segoe UI,system-ui,Helvetica,Arial;background:var(--bg);color:#eaf6ff}
+  .wrap{max-width:1100px;margin:18px auto;padding:12px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  h1{font-size:18px;margin:0;color:var(--accent)}
+  .top-stats{display:flex;gap:12px;align-items:center}
+  .stat{background:var(--panel);padding:8px 12px;border-radius:8px;min-width:120px;text-align:center}
+  .stat small{display:block;color:var(--muted);font-size:12px}
+  .game-container{display:flex;gap:12px}
+  .left{flex:1;display:flex;flex-direction:column;gap:8px}
+  canvas{background:#071a2b;border-radius:12px;display:block;width:100%;height:520px}
+  .controls{background:var(--panel);padding:10px;border-radius:10px;display:flex;align-items:center;justify-content:space-between}
+  .cards{display:flex;gap:8px;align-items:center}
+  .card{
+    width:110px;background:linear-gradient(180deg,#0f2a3d,#08202b);padding:8px;border-radius:10px;cursor:pointer;border:2px solid rgba(255,255,255,0.03);
+    user-select:none;text-align:center;
+  }
+  .card .name{font-weight:700;font-size:14px}
+  .card .cost{font-size:12px;color:var(--muted)}
+  .card .info{font-size:11px;color:#cfe8ff;margin-top:6px}
+  .btns{display:flex;gap:8px;align-items:center}
+  button{background:var(--accent);border:none;padding:8px 12px;border-radius:8px;color:white;cursor:pointer}
+  .footer{margin-top:10px;color:var(--muted);font-size:13px;text-align:center}
+  .small{font-size:12px;color:var(--muted)}
+  @media(max-width:900px){
+    .game-container{flex-direction:column}
+    canvas{height:420px}
+  }
 </style>
 </head>
 <body>
-  <h2>Clash-lite demo ⚔️</h2>
+  <div class="wrap">
+    <header>
+      <h1>Clash-lite — Mini Arena vs Bot ⚔️</h1>
+      <div class="top-stats">
+        <div class="stat">
+          <small>Elixir</small>
+          <div id="elixirVal">0 / 10</div>
+        </div>
+        <div class="stat">
+          <small>Time</small>
+          <div id="timer">00:00</div>
+        </div>
+        <div class="stat">
+          <small>Result</small>
+          <div id="resultText">—</div>
+        </div>
+      </div>
+    </header>
 
-  <div class="panel">
-    <strong>Player</strong><br/>
-    Gold: <span id="gold">0</span> • Trophies: <span id="trophies">0</span><br/>
-    <div style="margin-top:8px">
-      <button id="playMatch">Play vs Bot (earn trophies)</button>
-      <button id="openChest">Open Available Chest</button>
-      <button id="buyChest">Buy Chest (100 gold)</button>
+    <div class="game-container">
+      <div class="left">
+        <canvas id="arena" width="820" height="520"></canvas>
+        <div class="controls">
+          <div class="cards" id="cardsRow">
+            <!-- cards inserted by JS -->
+          </div>
+          <div class="btns">
+            <button id="restartBtn">Restart</button>
+            <div class="small">Click a card to select → Click arena to deploy (or drag)</div>
+          </div>
+        </div>
+      </div>
+      <div class="right" style="width:250px;">
+        <div style="background:var(--panel);padding:12px;border-radius:10px;">
+          <h3 style="margin:0 0 8px 0;color:var(--accent)">Match Info</h3>
+          <div class="small"><strong>Objective:</strong> Destroy an opposing tower. Each side has 3 towers (left, center, right). Center is main king tower.</div>
+          <hr style="margin:8px 0;border:none;border-top:1px solid rgba(255,255,255,0.03)"/>
+          <div style="display:flex;gap:8px;flex-direction:column">
+            <div><strong>Controls</strong>
+              <div class="small">Select card → Click on deployable half (yours) → Troop spawns</div>
+            </div>
+            <div><strong>Bot</strong>
+              <div class="small">AI drops troops automatically on a timer and reacts lightly.</div>
+            </div>
+            <div><strong>Troops</strong>
+              <div class="small">Squares = melee, Circles = ranged</div>
+            </div>
+          </div>
+        </div>
+        <div style="height:12px"></div>
+        <div style="background:var(--panel);padding:12px;border-radius:10px;">
+          <h3 style="margin:0 0 8px 0;color:var(--accent)">Tower Status</h3>
+          <div id="towerStatus" class="small"></div>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <div class="panel">
-    <strong>Cards</strong>
-    <div id="cards"></div>
-  </div>
-
-  <div class="panel">
-    <strong>Chests</strong>
-    <div id="chestList"></div>
-  </div>
-
-  <div class="panel">
-    <strong>Trophy Road (progress)</strong>
-    <div class="meter"><i id="trophyMeter"></i></div>
-    <div id="trophyRewards"></div>
+    <div class="footer">Made with ❤️ — tiny demo. Not affiliated with Supercell.</div>
   </div>
 
 <script>
-// ----- simple model -----
-const defaultState = {
-  gold: 150,
-  trophies: 0,
-  cards: {
-    'Archer': {level:1,fragments:0,rarity:'common'},
-    'Giant': {level:1,fragments:0,rarity:'rare'},
-    'Mage': {level:1,fragments:0,rarity:'epic'}
+/* ================================
+   Clash-lite: playable vs bot
+   Single-file HTML + JS demo
+   ================================ */
+
+const canvas = document.getElementById('arena');
+const ctx = canvas.getContext('2d');
+const W = canvas.width;
+const H = canvas.height;
+
+const elixirEl = document.getElementById('elixirVal');
+const timerEl = document.getElementById('timer');
+const resultEl = document.getElementById('resultText');
+const towerStatusEl = document.getElementById('towerStatus');
+const cardsRow = document.getElementById('cardsRow');
+const restartBtn = document.getElementById('restartBtn');
+
+let gameState = null;
+let lastTime = null;
+let selectedCard = null;
+let mouse = {x:0,y:0,down:false};
+
+const TEAM_PLAYER = 0;
+const TEAM_BOT = 1;
+
+const LANE_Y = {
+  top: H*0.25,
+  mid: H*0.5,
+  bot: H*0.75
+};
+
+// --- Card definitions ---
+const CARD_DEFS = [
+  {
+    id: 'knight',
+    name: 'Knight',
+    cost: 3,
+    hp: 300,
+    dmg: 40,
+    range: 20,
+    speed: 0.9,
+    size: 18,
+    type: 'melee',
+    color: '#f6c177'
   },
-  chests: [/* {type:'silver',unlockAt:timestamp} */],
-  lastSave: Date.now()
-};
+  {
+    id: 'archer',
+    name: 'Archer',
+    cost: 3,
+    hp: 160,
+    dmg: 28,
+    range: 140, // ranged
+    speed: 0.85,
+    size: 10,
+    type: 'ranged',
+    color: '#8ee7ff'
+  },
+  {
+    id: 'giant',
+    name: 'Giant',
+    cost: 5,
+    hp: 900,
+    dmg: 80,
+    range: 20,
+    speed: 0.55,
+    size: 26,
+    type: 'melee',
+    color: '#ff8b8b'
+  }
+];
 
-const CHEST_TYPES = {
-  silver:{openSeconds:5, goldMin:20, goldMax:40, fragMin:1, fragMax:3},
-  gold:{openSeconds:10, goldMin:80, goldMax:140, fragMin:5, fragMax:10}
-};
-
-let state = loadState();
-
-// ----- UI helpers -----
-const el = id=>document.getElementById(id);
-
-function saveState(){
-  state.lastSave = Date.now();
-  localStorage.setItem('crish-state', JSON.stringify(state));
-  render();
+// --- Tower definitions ---
+function makeTower(x,y,team,isKing=false){
+  return {
+    x,y,team,
+    hp: isKing ? 2000 : 1200,
+    maxHp: isKing ? 2000 : 1200,
+    range: 180,
+    dmg: 80,
+    fireRate: isKing ? 1200 : 1000, // ms
+    lastShot: 0,
+    radius: 22,
+    isKing
+  };
 }
 
-function loadState(){
-  try{ const s = JSON.parse(localStorage.getItem('crish-state')); if(s) return s; } catch(e){}
-  return JSON.parse(JSON.stringify(defaultState));
-}
-
+// Utility
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function dist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
 function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
 
-// ----- chest logic -----
-function addChest(type){
-  const unlockAt = Date.now() + CHEST_TYPES[type].openSeconds*1000;
-  state.chests.push({type,unlockAt,opened:false});
-  saveState();
+// --- Game init ---
+function resetGame(){
+  gameState = {
+    running: true,
+    time: 0,
+    elixir: 5,
+    elixirMax: 10,
+    elixirRate: 1, // per ~2 sec piece logic handled below
+    lastElixirTick: performance.now(),
+    troops: [], // list of active units and projectiles
+    towers: [],
+    projectiles: [],
+    events: [],
+    result: null,
+    bot: {lastDrop:0,dropInterval: 1600 + Math.random()*1200}
+  };
+  // player towers (left, king, right)
+  const gap = 120;
+  const baseY = H*0.5;
+  gameState.towers.push(makeTower(100, baseY - 140, TEAM_PLAYER, false));
+  gameState.towers.push(makeTower(100, baseY, TEAM_PLAYER, true));
+  gameState.towers.push(makeTower(100, baseY + 140, TEAM_PLAYER, false));
+  // bot towers on right
+  gameState.towers.push(makeTower(W-100, baseY - 140, TEAM_BOT, false));
+  gameState.towers.push(makeTower(W-100, baseY, TEAM_BOT, true));
+  gameState.towers.push(makeTower(W-100, baseY + 140, TEAM_BOT, false));
+  selectedCard = null;
+  resultEl.textContent = '—';
+  updateTowerStatus();
 }
 
-function tryOpenChest(index){
-  const chest = state.chests[index];
-  if(!chest) return;
-  if(Date.now() < chest.unlockAt){ alert('Chest still unlocking!'); return; }
-  if(chest.opened){ alert('Already opened'); return; }
-  const cfg = CHEST_TYPES[chest.type];
-  const gold = randInt(cfg.goldMin,cfg.goldMax);
-  const frags = randInt(cfg.fragMin,cfg.fragMax);
-  // award to random card
-  const names = Object.keys(state.cards);
-  const target = names[randInt(0,names.length-1)];
-  state.gold += gold;
-  state.cards[target].fragments += frags;
-  chest.opened = true;
-  chest.rewards = {gold,card:target,frags};
-  saveState();
-  alert(`Opened ${chest.type} chest → +${gold} gold, +${frags} ${target} fragments`);
-}
-
-// ----- upgrade logic -----
-function upgradeCard(name){
-  const card = state.cards[name];
-  const need = card.level * 10; // simple progression cost
-  if(card.fragments < need){ alert(`need ${need} frags to upgrade (you have ${card.fragments})`); return; }
-  card.fragments -= need;
-  card.level += 1;
-  state.gold += 0;
-  saveState();
-}
-
-// ----- play match (vs bot, simple) -----
-function playMatch(){
-  // simple outcome random with small trophy changes
-  const win = Math.random() < 0.55;
-  const delta = win ? 30 : -12;
-  state.trophies = Math.max(0, state.trophies + delta);
-  // award small gold
-  state.gold += win ? 60 : 10;
-  // maybe drop a chest every 3 wins
-  if(win && Math.random() < 0.33) addChest('silver');
-  saveState();
-}
-
-// ----- rendering -----
-function render(){
-  el('gold').textContent = state.gold;
-  el('trophies').textContent = state.trophies;
-  // cards
-  const cardsDiv = el('cards'); cardsDiv.innerHTML='';
-  for(const [name,c] of Object.entries(state.cards)){
-    const d = document.createElement('div'); d.className='card';
-    d.innerHTML = `<strong>${name}</strong><div>Lv ${c.level} • ${c.rarity}</div>
-                   <div>frags: ${c.fragments}</div>
-                   <div style="margin-top:6px"><button onclick="upgradeCard('${name}')">Upgrade</button></div>`;
-    cardsDiv.appendChild(d);
-  }
-  // chests
-  const chestDiv = el('chestList'); chestDiv.innerHTML='';
-  state.chests.forEach((ch,i)=>{
-    const j = document.createElement('div');
-    const tLeft = Math.max(0, Math.ceil((ch.unlockAt - Date.now())/1000));
-    j.innerHTML = `${i+1}. ${ch.type} ${ch.opened ? '(opened)' : `(unlock in ${tLeft}s)`} 
-                   <button onclick="tryOpenChest(${i})">Open</button>`;
-    chestDiv.appendChild(j);
+// --- UI: render cards row ---
+function renderCardsUI(){
+  cardsRow.innerHTML = '';
+  CARD_DEFS.forEach(def=>{
+    const c = document.createElement('div');
+    c.className = 'card';
+    c.dataset.card = def.id;
+    c.innerHTML = `<div class="name">${def.name}</div>
+                   <div class="cost">Cost: ${def.cost}</div>
+                   <div class="info">${def.type.toUpperCase()} • HP ${def.hp}</div>`;
+    c.addEventListener('click', ()=> {
+      if (!gameState.running) return;
+      if (gameState.elixir < def.cost) {
+        flashMessage('Not enough elixir!');
+        return;
+      }
+      selectedCard = def;
+      // highlight
+      document.querySelectorAll('.card').forEach(el=>el.style.outline='none');
+      c.style.outline = '2px solid rgba(255,255,255,0.12)';
+    });
+    cardsRow.appendChild(c);
   });
-  // trophy meter
-  const nextGoal = Math.ceil((state.trophies+1)/200)*200; // e.g., every 200 trophies
-  const pct = Math.min(100, Math.floor((state.trophies % 200)/2)); // simple visual
-  el('trophyMeter').style.width = pct+'%';
-  el('trophyRewards').textContent = `Next milestone: ${nextGoal} trophies`;
 }
 
-window.playMatch = playMatch;
-window.addChest = addChest;
-window.tryOpenChest = tryOpenChest;
-window.upgradeCard = upgradeCard;
+function flashMessage(txt){
+  resultEl.textContent = txt;
+  setTimeout(()=> {
+    if (gameState && gameState.result === null) resultEl.textContent = '—';
+  }, 900);
+}
 
-// ui bindings
-el('playMatch').addEventListener('click', playMatch);
-el('openChest').addEventListener('click', ()=>{
-  // open first available
-  const idx = state.chests.findIndex(c=>!c.opened && Date.now()>=c.unlockAt);
-  if(idx>=0) tryOpenChest(idx); else alert('no unlocked chest!');
+// --- Deploy logic ---
+function deployCard(def, x, y, team){
+  // enforce deploy zones: player can only place left half, bot right half
+  if (team===TEAM_PLAYER && x > W*0.5) return false;
+  if (team===TEAM_BOT && x < W*0.5) return false;
+  const dir = team===TEAM_PLAYER ? 1 : -1;
+  const troop = {
+    id: def.id + '-' + Math.random().toString(36).slice(2,7),
+    def,
+    team,
+    x, y,
+    hp: def.hp,
+    maxHp: def.hp,
+    dmg: def.dmg,
+    range: def.range,
+    speed: def.speed * dir,
+    size: def.size,
+    type: def.type,
+    target: null,
+    lastAttack: 0,
+    atkSpeed: 800, // ms base; could scale by troop
+  };
+  gameState.troops.push(troop);
+  return troop;
+}
+
+// --- Bot AI ---
+function botThink(now){
+  if (!gameState.running) return;
+  if (now - gameState.bot.lastDrop > gameState.bot.dropInterval){
+    // choose random card affordable
+    const affordable = CARD_DEFS.filter(c=>c.cost <= gameState.elixir);
+    if (affordable.length>0){
+      const pick = affordable[randInt(0,affordable.length-1)];
+      // pick a lane y (top/mid/bot) and spawn near right side
+      const lane = [LANE_Y.top, LANE_Y.mid, LANE_Y.bot][randInt(0,2)];
+      deployCard(pick, W - 160 + randInt(-10,10), lane + randInt(-18,18), TEAM_BOT);
+      gameState.elixir -= pick.cost;
+      gameState.bot.lastDrop = now;
+      // slightly randomize next interval
+      gameState.bot.dropInterval = 1400 + Math.random()*1600;
+    }
+  }
+}
+
+// --- Combat helpers ---
+function findNearestEnemy(unit, list){
+  let best = null, bd = 1e9;
+  for(const e of list){
+    if (e.team === unit.team) continue;
+    const d = Math.hypot(e.x - unit.x, e.y - unit.y);
+    if (d < bd){
+      bd = d; best = e;
+    }
+  }
+  return {target: best, dist: bd};
+}
+
+// Projectiles (for towers & ranged)
+function spawnProjectile(x,y,tx,ty,dmg,team,life=2000){
+  gameState.projectiles.push({
+    x,y,tx,ty,dmg,team,
+    vx:(tx-x)/Math.max(1,Math.hypot(tx-x,ty-y))*6,
+    vy:(ty-y)/Math.max(1,Math.hypot(tx-x,ty-y))*6,
+    life,
+    born: performance.now()
+  });
+}
+
+// Tower shooting logic
+function towersThink(now){
+  for(const t of gameState.towers){
+    if (t.hp <= 0) continue;
+    if (now - t.lastShot < t.fireRate) continue;
+    // find enemy troop in range or enemy tower
+    const enemies = gameState.troops.concat(gameState.towers.filter(x=>x.team!==t.team && x.hp>0));
+    const {target, dist} = findNearestEnemy(t, enemies);
+    if (target && dist <= t.range){
+      spawnProjectile(t.x, t.y, target.x, target.y, t.dmg, t.team);
+      t.lastShot = now;
+    }
+  }
+}
+
+// Troop logic: movement, find targets, attack
+function troopsThink(now, dt){
+  for(const u of gameState.troops){
+    if (u.hp <= 0) continue;
+    // if has target alive and in range -> attack
+    // targets can be troops or towers
+    const potential = gameState.troops.concat(gameState.towers.filter(x=>x.team!==u.team && x.hp>0));
+    const {target, dist} = findNearestEnemy(u, potential);
+    if (target && dist <= u.range + (u.size||10) + (target.radius||10)){
+      // in range -> attack
+      if (now - u.lastAttack >= u.atkSpeed){
+        // melee directly deal to target (instant)
+        target.hp -= u.dmg;
+        u.lastAttack = now;
+      }
+    } else {
+      // move forward
+      u.x += u.speed * dt * 0.06; // scale the delta
+      // clamp inside canvas
+      u.x = clamp(u.x, 30, W-30);
+    }
+  }
+  // remove dead troops
+  gameState.troops = gameState.troops.filter(u=>u.hp > -1000); // keep bodies briefly if needed
+}
+
+// Projectile logic: hit detection
+function projectilesThink(now){
+  for(const p of gameState.projectiles){
+    p.x += p.vx;
+    p.y += p.vy;
+    // check lifespan
+    if (now - p.born > p.life) p.dead = true;
+    // check collisions with enemy troops/towers
+    const targets = gameState.troops.concat(gameState.towers.filter(x=>x.team!==p.team && x.hp>0));
+    for(const t of targets){
+      const d = Math.hypot(t.x - p.x, t.y - p.y);
+      const hitRadius = (t.radius || (t.size||10)) + 6;
+      if (d <= hitRadius){
+        t.hp -= p.dmg;
+        p.dead = true;
+        break;
+      }
+    }
+  }
+  gameState.projectiles = gameState.projectiles.filter(p=>!p.dead);
+}
+
+// Check victory
+function checkVictory(){
+  const playerKing = gameState.towers.find(t=>t.team===TEAM_PLAYER && t.isKing);
+  const botKing = gameState.towers.find(t=>t.team===TEAM_BOT && t.isKing);
+  if (playerKing.hp <= 0){
+    endGame('You lost 😭 — King tower destroyed');
+  } else if (botKing.hp <= 0){
+    endGame('You win! 🎉 King tower destroyed');
+  }
+  // also check side towers all dead maybe
+  const playerAlive = gameState.towers.some(t=>t.team===TEAM_PLAYER && t.hp>0);
+  const botAlive = gameState.towers.some(t=>t.team===TEAM_BOT && t.hp>0);
+  if (!playerAlive){
+    endGame('You lost — all towers down 😢');
+  } else if (!botAlive){
+    endGame('You win — all enemy towers down 🎊');
+  }
+}
+
+// End game
+function endGame(txt){
+  gameState.running = false;
+  gameState.result = txt;
+  resultEl.textContent = txt;
+}
+
+// Update tower status UI
+function updateTowerStatus(){
+  towerStatusEl.innerHTML = '';
+  const order = ['Player left','Player king','Player right','Bot left','Bot king','Bot right'];
+  gameState.towers.forEach((t,i)=>{
+    const label = order[i] || ('Tower '+(i+1));
+    const percent = Math.max(0, Math.floor((t.hp / t.maxHp)*100));
+    const bar = `<div style="margin-bottom:6px"><strong>${label}</strong> — ${percent}%</div>
+                 <div style="height:8px;background:#072430;border-radius:6px;overflow:hidden">
+                   <div style="height:100%;width:${percent}%;background:linear-gradient(90deg,#33d,#1f9fff)"></div>
+                 </div>`;
+    towerStatusEl.innerHTML += bar;
+  });
+}
+
+// Render everything
+function render(now){
+  ctx.clearRect(0,0,W,H);
+  // draw river/arena lanes
+  ctx.fillStyle = '#062235';
+  ctx.fillRect(0,0,W,H);
+  // center line
+  ctx.fillStyle = 'rgba(255,255,255,0.02)';
+  ctx.fillRect(W/2-2,0,4,H);
+  // lanes highlight
+  [LANE_Y.top, LANE_Y.mid, LANE_Y.bot].forEach(y=>{
+    ctx.fillStyle = 'rgba(255,255,255,0.015)';
+    ctx.fillRect(0,y-60,W,120);
+  });
+
+  // towers
+  for(const t of gameState.towers){
+    if (t.hp <= 0) continue;
+    // body
+    ctx.beginPath();
+    ctx.fillStyle = t.team===TEAM_PLAYER ? '#2fa36f' : '#f05a5a';
+    ctx.arc(t.x, t.y, t.radius, 0, Math.PI*2);
+    ctx.fill();
+    // crown ring for king
+    if (t.isKing){
+      ctx.strokeStyle = 'gold';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    // hp bar
+    const hpPct = clamp(t.hp / t.maxHp, 0, 1);
+    ctx.fillStyle = '#222';
+    ctx.fillRect(t.x-36, t.y - t.radius - 18, 72, 8);
+    ctx.fillStyle = '#1f9fff';
+    ctx.fillRect(t.x-36, t.y - t.radius - 18, 72 * hpPct, 8);
+  }
+
+  // troops
+  for(const u of gameState.troops){
+    if (u.hp <= 0) {
+      // draw knocked out as faint
+      ctx.globalAlpha = 0.35;
+    } else ctx.globalAlpha = 1;
+    // shape: melee = square, ranged = circle
+    if (u.type === 'melee'){
+      ctx.fillStyle = u.team===TEAM_PLAYER ? '#ffd78a' : '#ffb3b3';
+      ctx.fillRect(u.x - u.size, u.y - u.size, u.size*2, u.size*2);
+    } else {
+      ctx.beginPath();
+      ctx.fillStyle = u.team===TEAM_PLAYER ? '#a3f0ff' : '#ffdeff';
+      ctx.arc(u.x, u.y, u.size, 0, Math.PI*2);
+      ctx.fill();
+    }
+    // hp bar small
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#222';
+    ctx.fillRect(u.x - u.size, u.y - u.size - 10, u.size*2, 5);
+    ctx.fillStyle = '#33d';
+    const pct = clamp(u.hp / u.maxHp, 0, 1);
+    ctx.fillRect(u.x - u.size, u.y - u.size - 10, (u.size*2) * pct, 5);
+  }
+
+  // projectiles
+  for(const p of gameState.projectiles){
+    ctx.beginPath();
+    ctx.fillStyle = p.team===TEAM_PLAYER ? '#29f' : '#f44';
+    ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // selected card indicator
+  if (selectedCard){
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.beginPath();
+    ctx.arc(mouse.x, mouse.y, 20, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px Inter';
+    ctx.fillText(selectedCard.name + ' • cost ' + selectedCard.cost, mouse.x+24, mouse.y+6);
+  }
+}
+
+// --- Main loop ---
+function gameLoop(now){
+  if (!lastTime) lastTime = now;
+  const dt = now - lastTime;
+  lastTime = now;
+  if (!gameState) return;
+  if (gameState.running){
+    gameState.time += dt;
+    // elixir regen (~1 elixir per 800 ms)
+    if (now - gameState.lastElixirTick > 800){
+      if (gameState.elixir < gameState.elixirMax) gameState.elixir = clamp(gameState.elixir + 1, 0, gameState.elixirMax);
+      gameState.lastElixirTick = now;
+    }
+    // bot think
+    botThink(now);
+    // towers shoot
+    towersThink(now);
+    // troops behavior
+    troopsThink(now, dt);
+    // projectiles
+    projectilesThink(now);
+    // remove dead troops (hp <= 0) after small delay
+    gameState.troops = gameState.troops.filter(u => {
+      if (u.hp <= -500) return false;
+      if (u.hp <= 0){
+        // mark for removal eventually
+        u.removedAt = u.removedAt || now;
+        if (now - u.removedAt > 800) return false;
+      }
+      return true;
+    });
+    // check victory
+    checkVictory();
+  }
+  // UI updates
+  elixirEl.textContent = Math.floor(gameState.elixir) + ' / ' + gameState.elixirMax;
+  // timer
+  const tSec = Math.floor(gameState.time / 1000);
+  const mm = String(Math.floor(tSec/60)).padStart(2,'0');
+  const ss = String(tSec % 60).padStart(2,'0');
+  timerEl.textContent = mm + ':' + ss;
+
+  updateTowerStatus();
+  render(now);
+  requestAnimationFrame(gameLoop);
+}
+
+// --- Mouse / touch handlers for deploy ---
+canvas.addEventListener('mousemove', (ev)=>{
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = (ev.clientX - rect.left) * (canvas.width / rect.width);
+  mouse.y = (ev.clientY - rect.top) * (canvas.height / rect.height);
 });
-el('buyChest').addEventListener('click', ()=>{
-  if(state.gold<100){ alert('not enough gold'); return; }
-  state.gold -= 100; addChest('gold');
+canvas.addEventListener('click', (ev)=>{
+  if (!gameState.running) return;
+  if (!selectedCard) return;
+  // only allow deploy on player's half (left)
+  const rect = canvas.getBoundingClientRect();
+  const x = mouse.x, y = mouse.y;
+  if (x > W * 0.52){ flashMessage('Deploy on your side!'); return; }
+  // find nearest lane y to spawn
+  let spawnY = Math.abs(y - LANE_Y.top) < 60 ? LANE_Y.top : (Math.abs(y - LANE_Y.mid) < 60 ? LANE_Y.mid : LANE_Y.bot);
+  // spawn a little forward from left edge depending on lane
+  const spawnX = 160 + randInt(-20,20);
+  const troop = deployCard(selectedCard, spawnX, spawnY + randInt(-12,12), TEAM_PLAYER);
+  if (troop){
+    gameState.elixir -= selectedCard.cost;
+    selectedCard = null;
+    document.querySelectorAll('.card').forEach(el=>el.style.outline='none');
+  } else {
+    flashMessage('Can\'t deploy there.');
+  }
 });
 
-// auto-save & render
-render();
-setInterval(render,1000);
+// optional drag & drop: start select on mousedown over UI card. (not implemented as drag for simplicity)
+
+// Restart
+restartBtn.addEventListener('click', ()=>{
+  resetGame();
+  renderCardsUI();
+});
+
+// initial boot
+resetGame();
+renderCardsUI();
+// small intro bot spawn for easier action: give bot a little time
+gameState.bot.lastDrop = performance.now() - 600;
+requestAnimationFrame(gameLoop);
+
 </script>
 </body>
 </html>
