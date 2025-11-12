@@ -1,0 +1,182 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<title>CR-ish Single File Demo</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Arial;margin:16px;background:#0b0f1a;color:#e6f0ff}
+  .panel{background:#0f1724;padding:12px;border-radius:8px;margin-bottom:12px}
+  button{padding:8px 12px;border-radius:6px;border:0;background:#1f6feb;color:white;cursor:pointer}
+  .card{display:inline-block;padding:6px 10px;border-radius:6px;background:#111827;margin:6px}
+  .meter{height:10px;background:#233;color:#1f6feb;border-radius:4px;overflow:hidden}
+  .meter > i{display:block;height:100%;background:#34d; width:0%}
+</style>
+</head>
+<body>
+  <h2>Clash-lite demo ⚔️</h2>
+
+  <div class="panel">
+    <strong>Player</strong><br/>
+    Gold: <span id="gold">0</span> • Trophies: <span id="trophies">0</span><br/>
+    <div style="margin-top:8px">
+      <button id="playMatch">Play vs Bot (earn trophies)</button>
+      <button id="openChest">Open Available Chest</button>
+      <button id="buyChest">Buy Chest (100 gold)</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <strong>Cards</strong>
+    <div id="cards"></div>
+  </div>
+
+  <div class="panel">
+    <strong>Chests</strong>
+    <div id="chestList"></div>
+  </div>
+
+  <div class="panel">
+    <strong>Trophy Road (progress)</strong>
+    <div class="meter"><i id="trophyMeter"></i></div>
+    <div id="trophyRewards"></div>
+  </div>
+
+<script>
+// ----- simple model -----
+const defaultState = {
+  gold: 150,
+  trophies: 0,
+  cards: {
+    'Archer': {level:1,fragments:0,rarity:'common'},
+    'Giant': {level:1,fragments:0,rarity:'rare'},
+    'Mage': {level:1,fragments:0,rarity:'epic'}
+  },
+  chests: [/* {type:'silver',unlockAt:timestamp} */],
+  lastSave: Date.now()
+};
+
+const CHEST_TYPES = {
+  silver:{openSeconds:5, goldMin:20, goldMax:40, fragMin:1, fragMax:3},
+  gold:{openSeconds:10, goldMin:80, goldMax:140, fragMin:5, fragMax:10}
+};
+
+let state = loadState();
+
+// ----- UI helpers -----
+const el = id=>document.getElementById(id);
+
+function saveState(){
+  state.lastSave = Date.now();
+  localStorage.setItem('crish-state', JSON.stringify(state));
+  render();
+}
+
+function loadState(){
+  try{ const s = JSON.parse(localStorage.getItem('crish-state')); if(s) return s; } catch(e){}
+  return JSON.parse(JSON.stringify(defaultState));
+}
+
+function randInt(a,b){ return Math.floor(Math.random()*(b-a+1))+a; }
+
+// ----- chest logic -----
+function addChest(type){
+  const unlockAt = Date.now() + CHEST_TYPES[type].openSeconds*1000;
+  state.chests.push({type,unlockAt,opened:false});
+  saveState();
+}
+
+function tryOpenChest(index){
+  const chest = state.chests[index];
+  if(!chest) return;
+  if(Date.now() < chest.unlockAt){ alert('Chest still unlocking!'); return; }
+  if(chest.opened){ alert('Already opened'); return; }
+  const cfg = CHEST_TYPES[chest.type];
+  const gold = randInt(cfg.goldMin,cfg.goldMax);
+  const frags = randInt(cfg.fragMin,cfg.fragMax);
+  // award to random card
+  const names = Object.keys(state.cards);
+  const target = names[randInt(0,names.length-1)];
+  state.gold += gold;
+  state.cards[target].fragments += frags;
+  chest.opened = true;
+  chest.rewards = {gold,card:target,frags};
+  saveState();
+  alert(`Opened ${chest.type} chest → +${gold} gold, +${frags} ${target} fragments`);
+}
+
+// ----- upgrade logic -----
+function upgradeCard(name){
+  const card = state.cards[name];
+  const need = card.level * 10; // simple progression cost
+  if(card.fragments < need){ alert(`need ${need} frags to upgrade (you have ${card.fragments})`); return; }
+  card.fragments -= need;
+  card.level += 1;
+  state.gold += 0;
+  saveState();
+}
+
+// ----- play match (vs bot, simple) -----
+function playMatch(){
+  // simple outcome random with small trophy changes
+  const win = Math.random() < 0.55;
+  const delta = win ? 30 : -12;
+  state.trophies = Math.max(0, state.trophies + delta);
+  // award small gold
+  state.gold += win ? 60 : 10;
+  // maybe drop a chest every 3 wins
+  if(win && Math.random() < 0.33) addChest('silver');
+  saveState();
+}
+
+// ----- rendering -----
+function render(){
+  el('gold').textContent = state.gold;
+  el('trophies').textContent = state.trophies;
+  // cards
+  const cardsDiv = el('cards'); cardsDiv.innerHTML='';
+  for(const [name,c] of Object.entries(state.cards)){
+    const d = document.createElement('div'); d.className='card';
+    d.innerHTML = `<strong>${name}</strong><div>Lv ${c.level} • ${c.rarity}</div>
+                   <div>frags: ${c.fragments}</div>
+                   <div style="margin-top:6px"><button onclick="upgradeCard('${name}')">Upgrade</button></div>`;
+    cardsDiv.appendChild(d);
+  }
+  // chests
+  const chestDiv = el('chestList'); chestDiv.innerHTML='';
+  state.chests.forEach((ch,i)=>{
+    const j = document.createElement('div');
+    const tLeft = Math.max(0, Math.ceil((ch.unlockAt - Date.now())/1000));
+    j.innerHTML = `${i+1}. ${ch.type} ${ch.opened ? '(opened)' : `(unlock in ${tLeft}s)`} 
+                   <button onclick="tryOpenChest(${i})">Open</button>`;
+    chestDiv.appendChild(j);
+  });
+  // trophy meter
+  const nextGoal = Math.ceil((state.trophies+1)/200)*200; // e.g., every 200 trophies
+  const pct = Math.min(100, Math.floor((state.trophies % 200)/2)); // simple visual
+  el('trophyMeter').style.width = pct+'%';
+  el('trophyRewards').textContent = `Next milestone: ${nextGoal} trophies`;
+}
+
+window.playMatch = playMatch;
+window.addChest = addChest;
+window.tryOpenChest = tryOpenChest;
+window.upgradeCard = upgradeCard;
+
+// ui bindings
+el('playMatch').addEventListener('click', playMatch);
+el('openChest').addEventListener('click', ()=>{
+  // open first available
+  const idx = state.chests.findIndex(c=>!c.opened && Date.now()>=c.unlockAt);
+  if(idx>=0) tryOpenChest(idx); else alert('no unlocked chest!');
+});
+el('buyChest').addEventListener('click', ()=>{
+  if(state.gold<100){ alert('not enough gold'); return; }
+  state.gold -= 100; addChest('gold');
+});
+
+// auto-save & render
+render();
+setInterval(render,1000);
+</script>
+</body>
+</html>
